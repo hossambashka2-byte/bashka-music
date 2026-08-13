@@ -1,0 +1,54 @@
+name: Build BASHKA AAB
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Extract PWA
+        run: |
+          unzip -o BASHKA_V_STORE_PLAY_READY.zip -d www || true
+          ls www
+      - name: Setup Android Project
+        run: |
+          mkdir -p app/src/main/assets/www
+          cp -r www/* app/src/main/assets/www/ || cp -r BASHKA_V_STORE_PLAY_READY/* app/src/main/assets/www/ || true
+          echo "android.useAndroidX=true" > gradle.properties
+          mkdir -p app/src/main/java/com/bashka/music
+          cat > app/src/main/java/com/bashka/music/MainActivity.java <<'EOF'
+          package com.bashka.music;
+          import android.app.Activity; import android.os.Bundle; import android.webkit.WebView; import android.webkit.WebSettings;
+          public class MainActivity extends Activity {
+            WebView w;
+            protected void onCreate(Bundle b){ super.onCreate(b); w=new WebView(this); setContentView(w); WebSettings s=w.getSettings(); s.setJavaScriptEnabled(true); s.setDomStorageEnabled(true); w.loadUrl("file:///android_asset/www/index.html"); }
+            public void onBackPressed(){ if(w.canGoBack()) w.goBack(); else super.onBackPressed(); }
+          }
+          EOF
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.bashka.music">
+            <uses-permission android:name="android.permission.INTERNET"/>
+            <application android:label="BASHKA MUSIC"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application>
+          </manifest>
+          EOF
+          cat > app/build.gradle <<'EOF'
+          plugins { id 'com.android.application' }
+          android { compileSdk 34; defaultConfig { applicationId "com.bashka.music"; minSdk 21; targetSdk 34; versionCode 3; versionName "3.0" }; buildTypes { release { minifyEnabled false } } }
+          EOF
+          cat > build.gradle <<'EOF'
+          buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:8.1.0' } } allprojects { repositories { google(); mavenCentral() } }
+          EOF
+          cat > settings.gradle <<'EOF'
+          include ':app'
+          EOF
+      - name: Build AAB
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.4-bin.zip -O gradle.zip && unzip -q gradle.zip && ./gradle-8.4/bin/gradle bundleRelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BASHKA-AAB
+          path: app/build/outputs/bundle/release/*.aab
