@@ -11,14 +11,22 @@ jobs:
           java-version: '17'
       - name: Extract PWA
         run: |
-          unzip -o BASHKA_V_STORE_PLAY_READY.zip -d www || true
-          ls www
+          unzip -o "BASHKA_V_STORE_PLAY_READY.zip" -d pwa || unzip -o *.zip -d pwa || true
+          ls pwa
       - name: Setup Android Project
         run: |
-          mkdir -p app/src/main/assets/www
-          cp -r www/* app/src/main/assets/www/ || cp -r BASHKA_V_STORE_PLAY_READY/* app/src/main/assets/www/ || true
-          echo "android.useAndroidX=true" > gradle.properties
-          mkdir -p app/src/main/java/com/bashka/music
+          rm -rf app build.gradle settings.gradle
+          mkdir -p app/src/main/assets/www app/src/main/java/com/bashka/music
+          cp -r pwa/* app/src/main/assets/www/ 2>/dev/null || cp -r pwa/BASHKA*/* app/src/main/assets/www/ || true
+          ls app/src/main/assets/www/
+          cat > settings.gradle <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          include ':app'
+          EOF
+          cat > build.gradle <<'EOF'
+          plugins { id 'com.android.application' version '8.1.0' apply false }
+          EOF
           cat > app/src/main/java/com/bashka/music/MainActivity.java <<'EOF'
           package com.bashka.music;
           import android.app.Activity; import android.os.Bundle; import android.webkit.WebView; import android.webkit.WebSettings;
@@ -37,17 +45,12 @@ jobs:
           EOF
           cat > app/build.gradle <<'EOF'
           plugins { id 'com.android.application' }
-          android { compileSdk 34; defaultConfig { applicationId "com.bashka.music"; minSdk 21; targetSdk 34; versionCode 3; versionName "3.0" }; buildTypes { release { minifyEnabled false } } }
-          EOF
-          cat > build.gradle <<'EOF'
-          buildscript { repositories { google(); mavenCentral() } dependencies { classpath 'com.android.tools.build:gradle:8.1.0' } } allprojects { repositories { google(); mavenCentral() } }
-          EOF
-          cat > settings.gradle <<'EOF'
-          include ':app'
+          android { namespace 'com.bashka.music'; compileSdk 34; defaultConfig { applicationId "com.bashka.music"; minSdk 21; targetSdk 34; versionCode 3; versionName "3.0" }; buildTypes { release { minifyEnabled false } } }
           EOF
       - name: Build AAB
         run: |
-          wget -q https://services.gradle.org/distributions/gradle-8.4-bin.zip -O gradle.zip && unzip -q gradle.zip && ./gradle-8.4/bin/gradle bundleRelease
+          chmod +x ./gradlew 2>/dev/null || true
+          wget -q https://services.gradle.org/distributions/gradle-8.4-bin.zip -O gradle.zip && unzip -q gradle.zip && ./gradle-8.4/bin/gradle bundleRelease --no-daemon
       - uses: actions/upload-artifact@v4
         with:
           name: BASHKA-AAB
